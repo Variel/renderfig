@@ -126,18 +126,49 @@ program
     const overrides: Override[] = [];
 
     // Parse text overrides
+    // Supports: "NodeName=full text" or "NodeName/search=replace"
     if (opts.text) {
       for (const t of opts.text) {
         const eqIdx = t.indexOf('=');
         if (eqIdx === -1) {
-          console.error(`Invalid text override: "${t}" (expected "name=value")`);
+          console.error(`Invalid text override: "${t}" (expected "name=value" or "name/search=replace")`);
           process.exit(1);
         }
-        overrides.push({
-          type: 'text',
-          target: t.substring(0, eqIdx),
-          value: t.substring(eqIdx + 1).replace(/\\n/g, '\n'),
-        });
+        const left = t.substring(0, eqIdx);
+        const value = t.substring(eqIdx + 1).replace(/\\n/g, '\n');
+
+        // Check for partial replacement syntax: "target/search"
+        const slashIdx = left.indexOf('/');
+        if (slashIdx !== -1) {
+          // Could be a path "Page/Frame/Node" or partial replace "Node/searchText"
+          // Heuristic: if the part after last slash looks like search text
+          // We use a special marker: double-slash "//" separates target from search
+          // Or: single slash with target being a known path vs search text
+          // Simpler: use the convention that partial replace uses "//" as separator
+          // Actually, let's check for "//" first
+          const dblSlashIdx = left.indexOf('//');
+          if (dblSlashIdx !== -1) {
+            overrides.push({
+              type: 'text',
+              target: left.substring(0, dblSlashIdx),
+              search: left.substring(dblSlashIdx + 2).replace(/\\n/g, '\n'),
+              value,
+            });
+          } else {
+            // Single slash: treat as full replace with path target
+            overrides.push({
+              type: 'text',
+              target: left,
+              value,
+            });
+          }
+        } else {
+          overrides.push({
+            type: 'text',
+            target: left,
+            value,
+          });
+        }
       }
     }
 

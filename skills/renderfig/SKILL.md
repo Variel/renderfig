@@ -67,11 +67,23 @@ npx renderfig render <파일경로> "페이지/프레임" -o output.png
 `--text "노드이름=새로운 텍스트"` 형식으로 텍스트 레이어의 내용을 교체합니다. 노드 이름은 1단계 inspect에서 확인한 이름을 사용합니다.
 
 ```bash
+# 전체 교체
 npx renderfig render design.fig "프로필 카드/Channy" \
   --text "Channy (차니)=새이름" \
   --text "Maker=디자이너" \
   -o output.png
 ```
+
+**부분 교체 (스타일 보존)**: `--text "노드이름//검색텍스트=대체텍스트"` 형식으로 텍스트의 일부만 교체하면서 기존 스타일(폰트 크기, 굵기 등)을 보존합니다. `//`로 노드이름과 검색어를 구분합니다.
+
+```bash
+# "진짜 자산관리 시작" 부분만 교체, 나머지 텍스트와 스타일 유지
+npx renderfig render design.fig "홈페이지/배너" \
+  --text "타이틀//진짜 자산관리 시작=스마트한 돈 관리" \
+  -o output.png
+```
+
+전체 교체 시에도 줄 수가 같으면 라인별 스타일이 보존됩니다. 예를 들어 원본이 2줄(1줄 Medium, 2줄 Bold)이면 교체 텍스트도 2줄일 때 각 줄의 스타일이 유지됩니다.
 
 #### 이미지 교체 `--image`
 
@@ -138,9 +150,14 @@ const buffer = await renderFrame({
   output: './output.png',
   scale: 2,
   overrides: [
+    // 전체 교체
     { type: 'text', target: 'Channy (차니)', value: '새이름' },
+    // 부분 교체 (search로 해당 부분만 교체, 스타일 보존)
+    { type: 'text', target: '타이틀', search: '원래텍스트', value: '새텍스트' },
     { type: 'image', target: '사진', src: './photo.jpg' },
     { type: 'style', target: 'Maker', props: { fontSize: 24, color: '#0066ff' } },
+    // 동일 이름 노드 구분: 인덱스 문법
+    { type: 'text', target: '이메일[1]', value: 'second@email.com' },
   ],
   fonts: [
     { family: 'Pretendard', src: './fonts/Pretendard-Regular.woff2' },
@@ -151,8 +168,8 @@ const buffer = await renderFrame({
 ## 작업 지침
 
 - **항상 inspect 먼저**: 렌더링 전 반드시 `inspect`로 구조를 파악하세요. 노드 이름을 정확히 알아야 오버라이드가 동작합니다.
-- **target 매칭**: 노드 이름 그대로 사용하거나 `/` 구분 경로 (예: `기본 정보/Channy (차니)`)로 지정합니다. 같은 이름의 노드가 여러 개면 경로를 사용하세요.
+- **target 매칭**: 노드 이름 그대로 사용하거나 `/` 구분 경로 (예: `기본 정보/Channy (차니)`)로 지정합니다. 같은 이름의 노드가 여러 개면 경로를 사용하거나 `이름[n]` 인덱스 문법 (0-based)으로 구분합니다 (예: `이메일[0]`, `이메일[1]`).
 - **대량 생성**: 같은 템플릿으로 여러 이미지를 만들 때는 Programmatic API를 사용하는 스크립트를 작성하세요.
 - **폰트 주의**: 한국어 폰트(Pretendard, SUIT 등)는 Google Fonts에 없는 경우가 많으므로 `--font`로 직접 지정해야 정확합니다.
-- **VECTOR 미지원**: 복잡한 벡터/아이콘 노드는 렌더링되지 않습니다. 이 경우 해당 노드가 빠진 상태로 출력됩니다.
+- **벡터 지원**: VECTOR, BOOLEAN_OPERATION 등 벡터 노드는 내부 path 데이터를 SVG로 디코딩하여 렌더링합니다. path blob이 없는 경우 색상 채우기 사각형으로 폴백합니다.
 - **렌더링 결과 확인**: 렌더링 후 출력 이미지를 열어 결과를 확인하고, 필요하면 오버라이드를 조정하세요.

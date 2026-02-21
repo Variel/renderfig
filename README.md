@@ -67,11 +67,21 @@ renderfig render design.fig "페이지/프레임" -o output.png
 #### 텍스트 교체 `--text`
 
 ```bash
+# 전체 교체
 renderfig render design.fig "프로필 카드/Channy" \
   --text "Channy (차니)=새이름" \
   --text "Maker=디자이너" \
   -o output.png
+
+# 부분 교체 (스타일 보존): "//"로 노드이름과 검색어를 구분
+renderfig render design.fig "홈페이지/배너" \
+  --text "타이틀//진짜 자산관리 시작=스마트한 돈 관리" \
+  -o output.png
 ```
+
+부분 교체 시 `//` 앞이 노드 target, 뒤가 검색할 텍스트, `=` 뒤가 대체 텍스트입니다. 검색된 부분만 교체되고 나머지 텍스트와 스타일(폰트 크기, 굵기 등)이 보존됩니다.
+
+전체 교체 시에도 줄 수가 같으면 라인별 스타일이 자동 보존됩니다.
 
 #### 이미지 교체 `--image`
 
@@ -177,6 +187,7 @@ const buffer = await renderFrame({
   scale: 2,
   overrides: [
     { type: 'text', target: 'Channy (차니)', value: '새이름' },
+    { type: 'text', target: '타이틀', search: '원래텍스트', value: '새텍스트' },
     { type: 'image', target: '사진', src: './photo.jpg' },
     { type: 'style', target: 'Maker', props: { fontSize: 24, color: '#0066ff' } },
   ],
@@ -203,12 +214,16 @@ const buffer = await renderFrame({
 
 ```typescript
 type Override =
-  | { type: 'text'; target: string; value: string }
+  | { type: 'text'; target: string; value: string; search?: string }
   | { type: 'image'; target: string; src: string }
   | { type: 'style'; target: string; props: Record<string, string | number> }
 ```
 
 `target`은 노드 이름 (예: `"Channy (차니)"`) 또는 `/` 구분 경로 (예: `"기본 정보/Channy (차니)"`)로 지정합니다.
+
+동일한 이름의 노드가 여러 개인 경우 `이름[n]` 인덱스 문법 (0-based)으로 구분합니다 (예: `이메일[0]`, `이메일[1]`).
+
+텍스트 오버라이드에서 `search` 필드를 지정하면 해당 부분만 교체하고 나머지 텍스트와 스타일을 보존합니다.
 
 ## 폰트 처리
 
@@ -231,7 +246,7 @@ type Override =
 | ELLIPSE | `border-radius:50%` |
 | INSTANCE / COMPONENT | 재귀적으로 자식 렌더링 |
 | IMAGE fill | `background-image: url(data:...)` 인라인 |
-| VECTOR | 미지원 (스킵) |
+| VECTOR / BOOLEAN_OPERATION | SVG path 렌더링 (path blob 디코딩) |
 
 ## 라이선스
 

@@ -19,7 +19,7 @@ export function applyOverrides(
 
     switch (override.type) {
       case 'text':
-        applyTextOverride(node, override.value);
+        applyTextOverride(node, override.value, override.search);
         break;
       case 'image':
         applyImageOverride(node, override.src, images);
@@ -31,14 +31,70 @@ export function applyOverrides(
   }
 }
 
-function applyTextOverride(node: FigmaNode, value: string): void {
+function applyTextOverride(node: FigmaNode, value: string, search?: string): void {
   const textData = node.properties['textData'] as Record<string, unknown> | undefined;
-  if (textData) {
+  if (!textData) return;
+
+  const oldText = textData['characters'] as string ?? '';
+  const styleIDs = textData['characterStyleIDs'] as number[] | undefined;
+
+  if (search) {
+    // Partial replacement: find `search` in text, replace with `value`, preserve styles
+    const idx = oldText.indexOf(search);
+    if (idx === -1) {
+      console.warn(`Warning: search text "${search}" not found in "${node.name}", doing full replace`);
+      textData['characters'] = value;
+      if (styleIDs) textData['characterStyleIDs'] = undefined;
+      return;
+    }
+
+    const before = oldText.substring(0, idx);
+    const after = oldText.substring(idx + search.length);
+    textData['characters'] = before + value + after;
+
+    if (styleIDs && styleIDs.length >= oldText.length) {
+      // Replacement inherits the style of the first matched character
+      const matchStyleID = styleIDs[idx];
+      const newIDs = [
+        ...styleIDs.slice(0, idx),
+        ...Array(value.length).fill(matchStyleID),
+        ...styleIDs.slice(idx + search.length),
+      ];
+      textData['characterStyleIDs'] = newIDs;
+    }
+  } else {
+    // Full replacement - preserve per-line styles if line count matches
+    if (styleIDs && styleIDs.length > 0) {
+      const oldLines = oldText.split('\n');
+      const newLines = value.split('\n');
+
+      if (oldLines.length === newLines.length && oldLines.length > 1) {
+        // Same line count: map styles per line
+        const newIDs: number[] = [];
+        let charIdx = 0;
+        for (let i = 0; i < oldLines.length; i++) {
+          const lineStyleID = styleIDs[charIdx] ?? styleIDs[0];
+          for (let j = 0; j < newLines[i].length; j++) {
+            newIDs.push(lineStyleID);
+          }
+          charIdx += oldLines[i].length;
+          if (i < oldLines.length - 1) {
+            // newline character inherits the style of current line
+            newIDs.push(lineStyleID);
+            charIdx++; // skip \n in old
+          }
+        }
+        textData['characterStyleIDs'] = newIDs;
+      } else {
+        // Different line count: drop style mapping
+        textData['characterStyleIDs'] = undefined;
+      }
+    }
     textData['characters'] = value;
   }
-  // Also update name if it matches the old text (auto-named text layers)
+
   if (node.properties['autoRename']) {
-    node.name = value;
+    node.name = search ? (textData['characters'] as string) : value;
   }
 }
 

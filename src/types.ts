@@ -15,6 +15,6 @@ export interface FontMapping {
 }
 
 export type Override =
-  | { type: 'text'; target: string; value: string }
+  | { type: 'text'; target: string; value: string; search?: string }
   | { type: 'image'; target: string; src: string }
   | { type: 'style'; target: string; props: Record<string, string | number> };

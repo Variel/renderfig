@@ -6,12 +6,14 @@ import { parseFigFile, FigmaNode } from 'parsefig';
 export interface FigFileData {
   nodeTree: FigmaNode[];
   images: Map<string, Buffer>;
+  blobs: Array<{ bytes: Uint8Array }>;
 }
 
 export function readFigFile(filePath: string): FigFileData {
   const result = parseFigFile(filePath);
   const images = extractImages(filePath);
-  return { nodeTree: result.nodeTree, images };
+  const blobs = (result.rawMessage as any)?.blobs ?? [];
+  return { nodeTree: result.nodeTree, images, blobs };
 }
 
 function extractImages(filePath: string): Map<string, Buffer> {
@@ -118,14 +120,19 @@ export function findNodeByTarget(
   const parts = resolved.split('/');
 
   if (parts.length === 1) {
-    // Simple name match - search recursively
-    return findByName(root, resolved);
+    // Check for index syntax: "NodeName[n]"
+    const { name, index } = parseNameIndex(resolved);
+    return findByNameWithIndex(root, name, index);
   }
 
-  // Path match
+  // Path match - last part may have index
+  const lastPart = parts[parts.length - 1];
+  const { name: lastName, index: lastIndex } = parseNameIndex(lastPart);
+  const pathParts = [...parts.slice(0, -1), lastName];
+
   function searchPath(node: FigmaNode, partIndex: number): FigmaNode | null {
-    if (node.name === parts[partIndex]) {
-      if (partIndex === parts.length - 1) return node;
+    if (node.name === pathParts[partIndex]) {
+      if (partIndex === pathParts.length - 1) return node;
       for (const child of node.children) {
         const found = searchPath(child, partIndex + 1);
         if (found) return found;
@@ -138,7 +145,57 @@ export function findNodeByTarget(
     return null;
   }
 
-  return searchPath(root, 0);
+  if (lastIndex === 0) {
+    return searchPath(root, 0);
+  }
+
+  // With index on last part, collect all matches and pick nth
+  const matches: FigmaNode[] = [];
+  function collectPathMatches(node: FigmaNode, partIndex: number): void {
+    if (node.name === pathParts[partIndex]) {
+      if (partIndex === pathParts.length - 1) {
+        matches.push(node);
+        return;
+      }
+      for (const child of node.children) {
+        collectPathMatches(child, partIndex + 1);
+      }
+    }
+    for (const child of node.children) {
+      collectPathMatches(child, partIndex);
+    }
+  }
+  collectPathMatches(root, 0);
+  return matches[lastIndex] ?? null;
+}
+
+/**
+ * Parse "NodeName[n]" syntax. Returns name and 0-based index.
+ * If no index specified, returns index 0.
+ */
+function parseNameIndex(part: string): { name: string; index: number } {
+  const m = part.match(/^(.+)\[(\d+)\]$/);
+  if (m) {
+    return { name: m[1], index: parseInt(m[2], 10) };
+  }
+  return { name: part, index: 0 };
+}
+
+function findByNameWithIndex(node: FigmaNode, name: string, index: number): FigmaNode | null {
+  if (index === 0) {
+    return findByName(node, name);
+  }
+  // Collect all matches and pick nth
+  const matches: FigmaNode[] = [];
+  collectByName(node, name, matches);
+  return matches[index] ?? null;
+}
+
+function collectByName(node: FigmaNode, name: string, results: FigmaNode[]): void {
+  if (node.name === name) results.push(node);
+  for (const child of node.children) {
+    collectByName(child, name, results);
+  }
 }
 
 function findByName(node: FigmaNode, name: string): FigmaNode | null {
@@ -148,4 +205,67 @@ function findByName(node: FigmaNode, name: string): FigmaNode | null {
     if (found) return found;
   }
   return null;
+}
+
+/**
+ * Decode Figma vector path blob into SVG path d attribute.
+ * Format: command byte + float32LE coordinates
+ *   0x00 = Z (close), 0x01 = M (2 floats), 0x02 = L (2 floats), 0x04 = C (6 floats)
+ */
+export function decodeFillGeometryBlob(bytes: Uint8Array): string {
+  const buf = Buffer.from(bytes);
+  let offset = 0;
+  const parts: string[] = [];
+
+  while (offset < buf.length) {
+    const cmd = buf[offset];
+    offset++;
+
+    switch (cmd) {
+      case 0: // CLOSE
+        parts.push('Z');
+        break;
+      case 1: { // MOVE_TO
+        const x = buf.readFloatLE(offset); offset += 4;
+        const y = buf.readFloatLE(offset); offset += 4;
+        parts.push(`M${fmt(x)} ${fmt(y)}`);
+        break;
+      }
+      case 2: { // LINE_TO
+        const x = buf.readFloatLE(offset); offset += 4;
+        const y = buf.readFloatLE(offset); offset += 4;
+        parts.push(`L${fmt(x)} ${fmt(y)}`);
+        break;
+      }
+      case 3: { // QUAD_TO
+        const x1 = buf.readFloatLE(offset); offset += 4;
+        const y1 = buf.readFloatLE(offset); offset += 4;
+        const x2 = buf.readFloatLE(offset); offset += 4;
+        const y2 = buf.readFloatLE(offset); offset += 4;
+        parts.push(`Q${fmt(x1)} ${fmt(y1)} ${fmt(x2)} ${fmt(y2)}`);
+        break;
+      }
+      case 4: { // CUBIC_TO
+        const x1 = buf.readFloatLE(offset); offset += 4;
+        const y1 = buf.readFloatLE(offset); offset += 4;
+        const x2 = buf.readFloatLE(offset); offset += 4;
+        const y2 = buf.readFloatLE(offset); offset += 4;
+        const x3 = buf.readFloatLE(offset); offset += 4;
+        const y3 = buf.readFloatLE(offset); offset += 4;
+        parts.push(`C${fmt(x1)} ${fmt(y1)} ${fmt(x2)} ${fmt(y2)} ${fmt(x3)} ${fmt(y3)}`);
+        break;
+      }
+      default:
+        // Unknown command, stop parsing
+        return parts.join(' ');
+    }
+  }
+
+  return parts.join(' ');
+}
+
+function fmt(n: number): string {
+  const s = n.toFixed(4);
+  // Strip trailing zeros after decimal
+  return s.replace(/\.?0+$/, '') || '0';
 }

@@ -16,7 +16,7 @@ export async function renderFrame(options: RenderOptions): Promise<Buffer> {
   const quality = options.quality;
 
   // 1. Parse .fig file and extract images
-  const { nodeTree, images } = readFigFile(figFile);
+  const { nodeTree, images, blobs } = readFigFile(figFile);
 
   // 2. Find target frame
   const frame = findFrameByPath(nodeTree, frameName);
@@ -30,7 +30,7 @@ export async function renderFrame(options: RenderOptions): Promise<Buffer> {
   }
 
   // 4. Generate HTML
-  const html = renderToHtml(frame, images, options.fonts);
+  const html = renderToHtml(frame, images, blobs, options.fonts);
 
   // 5. Take screenshot
   const size = frame.properties['size'] as { x: number; y: number } | undefined;
