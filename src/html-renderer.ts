@@ -169,8 +169,31 @@ function renderNode(
   // Position
   if (isAbsoluteChild && transform) {
     styles.push('position:absolute');
-    styles.push(`left:${transform.m02}px`);
-    styles.push(`top:${transform.m12}px`);
+
+    const hConstraint = props['horizontalConstraint'] as string | undefined;
+    const vConstraint = props['verticalConstraint'] as string | undefined;
+    let translateX = '0';
+    let translateY = '0';
+
+    // Horizontal positioning
+    if (hConstraint === 'CENTER') {
+      styles.push('left:50%');
+      translateX = '-50%';
+    } else {
+      styles.push(`left:${transform.m02}px`);
+    }
+
+    // Vertical positioning
+    if (vConstraint === 'CENTER') {
+      styles.push('top:50%');
+      translateY = '-50%';
+    } else {
+      styles.push(`top:${transform.m12}px`);
+    }
+
+    if (translateX !== '0' || translateY !== '0') {
+      styles.push(`transform:translate(${translateX}, ${translateY})`);
+    }
   }
 
   // Auto-layout (flex)
@@ -807,12 +830,14 @@ function mapJustify(align: string): string {
 
 function computeGradientAngle(transform: { m00: number; m01: number; m10: number; m11: number } | undefined): number {
   if (!transform) return 180; // default: top to bottom
-  // Figma gradient transform maps from gradient space (0,0)-(1,1) to node space
-  // The gradient direction in node space is determined by the transform
-  // Start point = (m02, m12), end point = (m00 + m02, m10 + m12)
-  const dx = transform.m00;
-  const dy = transform.m10;
+  // Figma gradient transform maps from element space to gradient space.
+  // The gradient direction in gradient space is (1, 0).
+  // To find the direction in element space, apply the inverse transform:
+  //   direction_element = (m11, -m10) (from inverse of 2x2 matrix, ignoring determinant scale)
   // CSS gradient angle: 0deg = bottom to top, 90deg = left to right
+  //   angle = atan2(dx, -dy) where (dx, dy) is direction in screen coords (y-down)
+  const dx = transform.m11;
+  const dy = -transform.m10;
   const radians = Math.atan2(dx, -dy);
   let degrees = Math.round(radians * 180 / Math.PI);
   if (degrees < 0) degrees += 360;

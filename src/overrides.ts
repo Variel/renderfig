@@ -93,8 +93,8 @@ function applyTextOverride(node: FigmaNode, value: string, search?: string): voi
     textData['characters'] = value;
   }
 
-  if (node.properties['autoRename']) {
-    node.name = search ? (textData['characters'] as string) : value;
+  if (node.properties['autoRename'] && !search) {
+    node.name = value;
   }
 }
 
