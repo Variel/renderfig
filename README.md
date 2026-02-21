@@ -57,6 +57,13 @@ renderfig inspect design.fig --depth all
         Maker [TEXT] 55x29
 ```
 
+**Mixed text styles 감지**: TEXT 노드 내에서 여러 스타일이 혼합된 경우 자동 표시:
+
+```
+배너 텍스트 [TEXT] 243x100 ("진짜 자산관리 시작\n위스키캣 가계부",
+  mixed: "진짜 자산관리 시작\n"→Medium 33px, "위스키캣 가계부"→default)
+```
+
 ### `render` - 프레임을 이미지로 렌더링
 
 ```bash
@@ -239,14 +246,16 @@ type Override =
 
 | Figma 노드 | 렌더링 방식 |
 |------------|------------|
-| FRAME (auto layout) | `display:flex` + `flex-direction` + `gap` + `padding` |
+| FRAME (auto layout) | `display:flex` + hug/fixed sizing + `gap` + `padding` |
 | FRAME (absolute) | `position:relative` / 자식 `position:absolute` |
-| TEXT | `font-family/size/weight` + `color` + `text-align` |
+| TEXT | mixed styles (characterStyleIDs) + `font` + `color` + `text-align` |
 | ROUNDED_RECTANGLE | `background` + `border-radius` |
 | ELLIPSE | `border-radius:50%` |
 | INSTANCE / COMPONENT | 재귀적으로 자식 렌더링 |
 | IMAGE fill | `background-image: url(data:...)` 인라인 |
-| VECTOR / BOOLEAN_OPERATION | SVG path 렌더링 (path blob 디코딩) |
+| VECTOR / BOOLEAN_OPERATION | SVG `<path>` 렌더링 (fillGeometry blob 디코딩) |
+| LINE | `border-bottom` 렌더링 |
+| 그라디언트 | `linear-gradient` / `radial-gradient` 지원 |
 
 ## 라이선스
 

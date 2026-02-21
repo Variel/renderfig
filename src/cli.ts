@@ -72,13 +72,46 @@ function printInspectNode(node: FigmaNode, indent: number): void {
   const fillPaints = node.properties['fillPaints'] as Array<Record<string, unknown>> | undefined;
   if (fillPaints?.some(p => p['type'] === 'IMAGE')) extras.push('image');
 
-  // Text content preview
+  // Text content preview + mixed style info
   if (node.type === 'TEXT') {
-    const textData = node.properties['textData'] as { characters: string } | undefined;
+    const textData = node.properties['textData'] as {
+      characters: string;
+      characterStyleIDs?: number[];
+      styleOverrideTable?: Array<{
+        styleID: number;
+        fontSize?: number;
+        fontName?: { family: string; style: string };
+      }>;
+    } | undefined;
     const text = textData?.characters ?? '';
     if (text && text !== node.name) {
       const preview = text.length > 40 ? text.substring(0, 40) + '...' : text;
       extras.push(`"${preview}"`);
+    }
+    // Show mixed styles info
+    const styleIDs = textData?.characterStyleIDs;
+    const overrideTable = textData?.styleOverrideTable;
+    if (styleIDs && overrideTable && new Set(styleIDs).size > 1) {
+      const styleMap = new Map<number, typeof overrideTable[0]>();
+      for (const entry of overrideTable) styleMap.set(entry.styleID, entry);
+      // Build run descriptions
+      const runs: string[] = [];
+      let i = 0;
+      while (i < text.length && i < styleIDs.length) {
+        const sid = styleIDs[i];
+        let j = i;
+        while (j < text.length && j < styleIDs.length && styleIDs[j] === sid) j++;
+        const runText = text.substring(i, j).replace(/\n/g, '\\n');
+        const preview = runText.length > 20 ? runText.substring(0, 20) + '..' : runText;
+        const override = styleMap.get(sid);
+        const parts: string[] = [];
+        if (override?.fontName) parts.push(override.fontName.style);
+        if (override?.fontSize) parts.push(`${override.fontSize}px`);
+        const desc = parts.length > 0 ? parts.join(' ') : 'default';
+        runs.push(`"${preview}"→${desc}`);
+        i = j;
+      }
+      extras.push(`mixed: ${runs.join(', ')}`);
     }
   }
 
