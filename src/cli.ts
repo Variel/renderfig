@@ -1,16 +1,20 @@
 #!/usr/bin/env node
+import * as path from 'path';
 import { Command } from 'commander';
 import { readFigFile, findFrameByPath } from './fig-reader';
 import { renderFrame } from './index';
 import { Override, FontMapping } from './types';
 import { FigmaNode } from 'parsefig';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pkg = require(path.resolve(__dirname, '../package.json'));
+
 const program = new Command();
 
 program
   .name('renderfig')
   .description('Render Figma .fig frames to PNG/JPG')
-  .version('0.2.0');
+  .version(pkg.version);
 
 // --- inspect command ---
 program
