@@ -108,6 +108,16 @@ renderfig render design.fig "프로필 카드/Channy" \
   -o output.png
 ```
 
+**텍스트 런 단위 스타일 수정**: `--style "노드이름//검색텍스트.속성=값"` 형식으로 특정 텍스트 부분의 스타일만 변경할 수 있습니다. `--text`의 `//` 문법과 동일합니다.
+
+```bash
+# "진짜 자산관리 시작"은 ExtraBold, "위스키캣 가계부"는 Light로 변경
+renderfig render design.fig "홈페이지/배너" \
+  --style "타이틀//진짜 자산관리 시작.fontWeight=ExtraBold" \
+  --style "타이틀//위스키캣 가계부.fontWeight=Light" \
+  -o output.png
+```
+
 지원하는 스타일 속성:
 
 **위치 & 크기**
@@ -197,6 +207,8 @@ const buffer = await renderFrame({
     { type: 'text', target: '타이틀', search: '원래텍스트', value: '새텍스트' },
     { type: 'image', target: '사진', src: './photo.jpg' },
     { type: 'style', target: 'Maker', props: { fontSize: 24, color: '#0066ff' } },
+    // 텍스트 런 단위 스타일: search로 특정 부분만 변경
+    { type: 'style', target: '타이틀', search: '위스키캣 가계부', props: { fontWeight: 'Light' } },
   ],
   fonts: [
     { family: 'Pretendard', src: './fonts/Pretendard-Regular.woff2' },
@@ -223,7 +235,7 @@ const buffer = await renderFrame({
 type Override =
   | { type: 'text'; target: string; value: string; search?: string }
   | { type: 'image'; target: string; src: string }
-  | { type: 'style'; target: string; props: Record<string, string | number> }
+  | { type: 'style'; target: string; props: Record<string, string | number>; search?: string }
 ```
 
 `target`은 노드 이름 (예: `"Channy (차니)"`) 또는 `/` 구분 경로 (예: `"기본 정보/Channy (차니)"`)로 지정합니다.
@@ -231,6 +243,8 @@ type Override =
 동일한 이름의 노드가 여러 개인 경우 `이름[n]` 인덱스 문법 (0-based)으로 구분합니다 (예: `이메일[0]`, `이메일[1]`).
 
 텍스트 오버라이드에서 `search` 필드를 지정하면 해당 부분만 교체하고 나머지 텍스트와 스타일을 보존합니다.
+
+스타일 오버라이드에서 `search` 필드를 지정하면 해당 텍스트 런의 스타일만 개별 변경합니다 (`fontWeight`, `fontFamily`, `fontSize`, `color` 등).
 
 ## 폰트 처리
 

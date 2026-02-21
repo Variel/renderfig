@@ -226,8 +226,9 @@ program
     }
 
     // Parse style overrides
+    // Supports: "NodeName.prop=value" or "NodeName//searchText.prop=value"
     if (opts.style) {
-      const grouped = new Map<string, Record<string, string | number>>();
+      const grouped = new Map<string, { target: string; search?: string; props: Record<string, string | number> }>();
       for (const s of opts.style) {
         const dotIdx = s.indexOf('.');
         const eqIdx = s.indexOf('=');
@@ -235,16 +236,25 @@ program
           console.error(`Invalid style override: "${s}" (expected "name.prop=value")`);
           process.exit(1);
         }
-        const target = s.substring(0, dotIdx);
+        const targetRaw = s.substring(0, dotIdx);
         const prop = s.substring(dotIdx + 1, eqIdx);
         const val = s.substring(eqIdx + 1);
 
-        if (!grouped.has(target)) grouped.set(target, {});
+        let target = targetRaw;
+        let search: string | undefined;
+        const dblSlashIdx = targetRaw.indexOf('//');
+        if (dblSlashIdx !== -1) {
+          target = targetRaw.substring(0, dblSlashIdx);
+          search = targetRaw.substring(dblSlashIdx + 2);
+        }
+
+        const groupKey = search ? `${target}//${search}` : target;
+        if (!grouped.has(groupKey)) grouped.set(groupKey, { target, search, props: {} });
         const numVal = Number(val);
-        grouped.get(target)![prop] = isNaN(numVal) ? val : numVal;
+        grouped.get(groupKey)!.props[prop] = isNaN(numVal) ? val : numVal;
       }
-      for (const [target, props] of grouped) {
-        overrides.push({ type: 'style', target, props });
+      for (const [, { target, search, props }] of grouped) {
+        overrides.push({ type: 'style', target, props, search });
       }
     }
 

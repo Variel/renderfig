@@ -107,6 +107,16 @@ npx renderfig render design.fig "프로필 카드/Channy" \
   -o output.png
 ```
 
+**텍스트 런 단위 스타일 수정**: `--style "노드이름//검색텍스트.속성=값"` 형식으로 mixed text 내 특정 부분의 스타일만 변경합니다. `--text`의 `//` 문법과 동일합니다.
+
+```bash
+# 첫째 줄은 ExtraBold, 둘째 줄은 Light
+npx renderfig render design.fig "홈페이지/배너" \
+  --style "타이틀//진짜 자산관리 시작.fontWeight=ExtraBold" \
+  --style "타이틀//위스키캣 가계부.fontWeight=Light" \
+  -o output.png
+```
+
 지원하는 스타일 속성:
 
 **위치 & 크기**: `x`, `y`, `width`, `height`
@@ -157,6 +167,8 @@ const buffer = await renderFrame({
     { type: 'text', target: '타이틀', search: '원래텍스트', value: '새텍스트' },
     { type: 'image', target: '사진', src: './photo.jpg' },
     { type: 'style', target: 'Maker', props: { fontSize: 24, color: '#0066ff' } },
+    // 텍스트 런 단위 스타일 변경
+    { type: 'style', target: '타이틀', search: '위스키캣 가계부', props: { fontWeight: 'Light' } },
     // 동일 이름 노드 구분: 인덱스 문법
     { type: 'text', target: '이메일[1]', value: 'second@email.com' },
   ],

@@ -25,7 +25,7 @@ export function applyOverrides(
         applyImageOverride(node, override.src, images);
         break;
       case 'style':
-        applyStyleOverride(node, override.props);
+        applyStyleOverride(node, override.props, override.search);
         break;
     }
   }
@@ -133,8 +133,15 @@ function applyImageOverride(
 
 function applyStyleOverride(
   node: FigmaNode,
-  props: Record<string, string | number>
+  props: Record<string, string | number>,
+  search?: string
 ): void {
+  // Per-run style override: target only the text run matching `search`
+  if (search && node.type === 'TEXT') {
+    applyRunStyleOverride(node, props, search);
+    return;
+  }
+
   for (const [key, value] of Object.entries(props)) {
     switch (key) {
       // --- Position & Size ---
@@ -235,13 +242,28 @@ function applyStyleOverride(
         break;
 
       // --- Typography ---
-      case 'fontSize':
+      case 'fontSize': {
         node.properties['fontSize'] = Number(value);
+        // Also update styleOverrideTable entries
+        const tdFs = node.properties['textData'] as { styleOverrideTable?: Array<Record<string, unknown>> } | undefined;
+        if (tdFs?.styleOverrideTable) {
+          for (const entry of tdFs.styleOverrideTable) {
+            if (entry['fontSize'] !== undefined) entry['fontSize'] = Number(value);
+          }
+        }
         break;
+      }
       case 'fontFamily': {
         const fontName = (node.properties['fontName'] as Record<string, string> | undefined) ?? { family: '', style: 'Regular', postscript: '' };
         fontName['family'] = String(value);
         node.properties['fontName'] = fontName;
+        // Also update styleOverrideTable entries
+        const tdFf = node.properties['textData'] as { styleOverrideTable?: Array<{ fontName?: Record<string, string> }> } | undefined;
+        if (tdFf?.styleOverrideTable) {
+          for (const entry of tdFf.styleOverrideTable) {
+            if (entry.fontName) entry.fontName['family'] = String(value);
+          }
+        }
         break;
       }
       case 'fontWeight':
@@ -249,6 +271,13 @@ function applyStyleOverride(
         const fn = (node.properties['fontName'] as Record<string, string> | undefined) ?? { family: 'sans-serif', style: 'Regular', postscript: '' };
         fn['style'] = String(value);
         node.properties['fontName'] = fn;
+        // Also update styleOverrideTable entries
+        const tdFw = node.properties['textData'] as { styleOverrideTable?: Array<{ fontName?: Record<string, string> }> } | undefined;
+        if (tdFw?.styleOverrideTable) {
+          for (const entry of tdFw.styleOverrideTable) {
+            if (entry.fontName) entry.fontName['style'] = String(value);
+          }
+        }
         break;
       }
       case 'textAlign':
@@ -335,6 +364,109 @@ function ensureSize(node: FigmaNode): Record<string, number> {
     node.properties['size'] = { x: 0, y: 0 };
   }
   return node.properties['size'] as Record<string, number>;
+}
+
+function applyRunStyleOverride(
+  node: FigmaNode,
+  props: Record<string, string | number>,
+  search: string
+): void {
+  const textData = node.properties['textData'] as {
+    characters: string;
+    characterStyleIDs?: number[];
+    styleOverrideTable?: Array<{ styleID: number; fontName?: Record<string, string>; fontSize?: number; lineHeight?: Record<string, unknown>; letterSpacing?: Record<string, unknown>; fillPaints?: Array<Record<string, unknown>>; textDecoration?: string }>;
+  } | undefined;
+  if (!textData) return;
+
+  const text = textData.characters ?? '';
+  const idx = text.indexOf(search);
+  if (idx === -1) {
+    console.warn(`Warning: search text "${search}" not found in "${node.name}" for style override`);
+    return;
+  }
+
+  const styleIDs = textData.characterStyleIDs;
+  if (!styleIDs || styleIDs.length === 0) {
+    // No mixed styles — apply to node default
+    for (const [key, value] of Object.entries(props)) {
+      applyStyleOverride(node, { [key]: value });
+    }
+    return;
+  }
+
+  // Collect unique styleIDs in the matched range
+  const matchedIDs = new Set<number>();
+  for (let i = idx; i < idx + search.length && i < styleIDs.length; i++) {
+    matchedIDs.add(styleIDs[i]);
+  }
+
+  const overrideTable = textData.styleOverrideTable ?? [];
+  const styleMap = new Map<number, typeof overrideTable[0]>();
+  for (const entry of overrideTable) {
+    styleMap.set(entry.styleID, entry);
+  }
+
+  // Node defaults — used to populate missing fields in override entries
+  const defaultFontName = node.properties['fontName'] as Record<string, string> | undefined;
+  const defaultFontSize = node.properties['fontSize'] as number | undefined;
+
+  for (const sid of matchedIDs) {
+    const entry = styleMap.get(sid);
+    if (entry) {
+      // Ensure fontName exists by copying from node default
+      if (!entry.fontName && defaultFontName) {
+        entry.fontName = { ...defaultFontName };
+      }
+      if (entry.fontSize === undefined && defaultFontSize !== undefined) {
+        entry.fontSize = defaultFontSize;
+      }
+      applyTypographyPropsToEntry(entry, props);
+    } else {
+      // Default style run — apply to node-level properties
+      for (const [key, value] of Object.entries(props)) {
+        applyStyleOverride(node, { [key]: value });
+      }
+    }
+  }
+}
+
+function applyTypographyPropsToEntry(
+  entry: { fontName?: Record<string, string>; fontSize?: number; lineHeight?: Record<string, unknown>; letterSpacing?: Record<string, unknown>; fillPaints?: Array<Record<string, unknown>>; textDecoration?: string },
+  props: Record<string, string | number>
+): void {
+  for (const [key, value] of Object.entries(props)) {
+    switch (key) {
+      case 'fontWeight':
+      case 'fontStyle':
+        if (entry.fontName) entry.fontName['style'] = String(value);
+        break;
+      case 'fontFamily':
+        if (entry.fontName) entry.fontName['family'] = String(value);
+        break;
+      case 'fontSize':
+        entry.fontSize = Number(value);
+        break;
+      case 'lineHeight':
+        entry.lineHeight = { value: Number(value), units: 'PIXELS' };
+        break;
+      case 'lineHeightPercent':
+        entry.lineHeight = { value: Number(value), units: 'PERCENT' };
+        break;
+      case 'letterSpacing':
+        entry.letterSpacing = { value: Number(value), units: 'PIXELS' };
+        break;
+      case 'color': {
+        const color = parseColor(String(value));
+        if (color) {
+          entry.fillPaints = [{ type: 'SOLID', color, opacity: 1, visible: true, blendMode: 'NORMAL' }];
+        }
+        break;
+      }
+      case 'textDecoration':
+        entry.textDecoration = String(value).toUpperCase();
+        break;
+    }
+  }
 }
 
 function parseColor(hex: string): { r: number; g: number; b: number; a: number } | null {
