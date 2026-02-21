@@ -1,0 +1,39 @@
+{
+  "name": "renderfig",
+  "version": "0.1.0",
+  "description": "Render Figma .fig frames to PNG/JPG with text/image/style overrides",
+  "keywords": ["figma", "fig", "render", "screenshot", "template", "png", "image"],
+  "author": "Variel",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Variel/renderfig.git"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "renderfig": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "dev": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "parsefig": "^0.1.0",
+    "playwright": "^1.52.0",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.0",
+    "tsx": "^4.19.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
