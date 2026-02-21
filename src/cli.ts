@@ -10,7 +10,7 @@ const program = new Command();
 program
   .name('renderfig')
   .description('Render Figma .fig frames to PNG/JPG')
-  .version('0.1.0');
+  .version('0.2.0');
 
 // --- inspect command ---
 program

@@ -1,6 +1,6 @@
 {
   "name": "renderfig",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Render Figma .fig frames to PNG/JPG with text/image/style overrides",
   "keywords": ["figma", "fig", "render", "screenshot", "template", "png", "image"],
   "author": "Variel",
