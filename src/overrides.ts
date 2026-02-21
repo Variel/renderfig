@@ -7,10 +7,11 @@ import { findNodeByTarget, hashToHex } from './fig-reader';
 export function applyOverrides(
   frame: FigmaNode,
   overrides: Override[],
-  images: Map<string, Buffer>
+  images: Map<string, Buffer>,
+  framePath?: string
 ): void {
   for (const override of overrides) {
-    const node = findNodeByTarget(frame, override.target);
+    const node = findNodeByTarget(frame, override.target, framePath);
     if (!node) {
       console.warn(`Warning: target "${override.target}" not found, skipping override`);
       continue;

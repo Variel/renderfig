@@ -136,7 +136,7 @@ program
         overrides.push({
           type: 'text',
           target: t.substring(0, eqIdx),
-          value: t.substring(eqIdx + 1),
+          value: t.substring(eqIdx + 1).replace(/\\n/g, '\n'),
         });
       }
     }

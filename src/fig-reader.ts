@@ -106,13 +106,20 @@ export function findFrameByPath(
 
 export function findNodeByTarget(
   root: FigmaNode,
-  target: string
+  target: string,
+  framePath?: string
 ): FigmaNode | null {
-  const parts = target.split('/');
+  // Strip frame path prefix if target starts with it
+  let resolved = target;
+  if (framePath && resolved.startsWith(framePath + '/')) {
+    resolved = resolved.slice(framePath.length + 1);
+  }
+
+  const parts = resolved.split('/');
 
   if (parts.length === 1) {
     // Simple name match - search recursively
-    return findByName(root, target);
+    return findByName(root, resolved);
   }
 
   // Path match

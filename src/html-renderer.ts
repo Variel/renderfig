@@ -200,12 +200,21 @@ function renderNode(
         const color = paint['color'] as { r: number; g: number; b: number; a: number };
         styles.push(`background-color:${rgbaToCSS(color, paintOpacity)}`);
       } else if (paint['type'] === 'GRADIENT_LINEAR') {
-        const stops = paint['colorStops'] as Array<{ color: { r: number; g: number; b: number; a: number }; position: number }> | undefined;
-        if (stops) {
+        const stops = (paint['stops'] ?? paint['colorStops']) as Array<{ color: { r: number; g: number; b: number; a: number }; position: number }> | undefined;
+        if (stops && stops.length > 0) {
+          const angle = computeGradientAngle(paint['transform'] as { m00: number; m01: number; m10: number; m11: number } | undefined);
           const cssStops = stops.map(s =>
             `${rgbaToCSS(s.color, paintOpacity)} ${(s.position * 100).toFixed(1)}%`
           ).join(', ');
-          styles.push(`background:linear-gradient(${cssStops})`);
+          styles.push(`background:linear-gradient(${angle}deg, ${cssStops})`);
+        }
+      } else if (paint['type'] === 'GRADIENT_RADIAL') {
+        const stops = (paint['stops'] ?? paint['colorStops']) as Array<{ color: { r: number; g: number; b: number; a: number }; position: number }> | undefined;
+        if (stops && stops.length > 0) {
+          const cssStops = stops.map(s =>
+            `${rgbaToCSS(s.color, paintOpacity)} ${(s.position * 100).toFixed(1)}%`
+          ).join(', ');
+          styles.push(`background:radial-gradient(ellipse at center, ${cssStops})`);
         }
       } else if (paint['type'] === 'IMAGE') {
         const imageDataUri = resolveImageDataUri(paint, images);
@@ -330,9 +339,24 @@ function renderNode(
     styles.push('border-radius:50%');
   }
 
-  // VECTOR - skip (as planned)
-  if (type === 'VECTOR' || type === 'BOOLEAN_OPERATION' || type === 'LINE' || type === 'STAR' || type === 'REGULAR_POLYGON') {
-    return '';
+  // VECTOR types - render as colored shape with fill
+  if (type === 'VECTOR' || type === 'BOOLEAN_OPERATION' || type === 'STAR' || type === 'REGULAR_POLYGON') {
+    const styleStr = styles.join(';');
+    return `<div style="${escapeAttr(styleStr)}"></div>`;
+  }
+
+  // LINE
+  if (type === 'LINE') {
+    if (!styles.some(s => s.startsWith('border'))) {
+      const strokeP = props['strokePaints'] as Array<Record<string, unknown>> | undefined;
+      if (strokeP && strokeP.length > 0 && strokeP[0]['type'] === 'SOLID') {
+        const c = strokeP[0]['color'] as { r: number; g: number; b: number; a: number };
+        const sw = props['strokeWeight'] as number ?? 1;
+        styles.push(`border-bottom:${sw}px solid ${rgbaToCSS(c, 1)}`);
+      }
+    }
+    const styleStr = styles.join(';');
+    return `<div style="${escapeAttr(styleStr)}"></div>`;
   }
 
   // Render children
@@ -358,6 +382,24 @@ function renderTextNode(
   images: Map<string, Buffer>
 ): string {
   const props = node.properties;
+
+  // Handle textAutoResize - remove fixed size constraints
+  const autoResize = props['textAutoResize'] as string | undefined;
+  if (autoResize === 'WIDTH_AND_HEIGHT') {
+    // Remove both width and height - let text flow naturally
+    for (let i = styles.length - 1; i >= 0; i--) {
+      if (styles[i].startsWith('width:') || styles[i].startsWith('height:')) {
+        styles.splice(i, 1);
+      }
+    }
+  } else if (autoResize === 'HEIGHT') {
+    // Keep width, remove height
+    for (let i = styles.length - 1; i >= 0; i--) {
+      if (styles[i].startsWith('height:')) {
+        styles.splice(i, 1);
+      }
+    }
+  }
 
   // Font
   const fontName = props['fontName'] as { family: string; style: string } | undefined;
@@ -497,6 +539,20 @@ function mapJustify(align: string): string {
     case 'SPACE_BETWEEN': return 'space-between';
     default: return 'flex-start';
   }
+}
+
+function computeGradientAngle(transform: { m00: number; m01: number; m10: number; m11: number } | undefined): number {
+  if (!transform) return 180; // default: top to bottom
+  // Figma gradient transform maps from gradient space (0,0)-(1,1) to node space
+  // The gradient direction in node space is determined by the transform
+  // Start point = (m02, m12), end point = (m00 + m02, m10 + m12)
+  const dx = transform.m00;
+  const dy = transform.m10;
+  // CSS gradient angle: 0deg = bottom to top, 90deg = left to right
+  const radians = Math.atan2(dx, -dy);
+  let degrees = Math.round(radians * 180 / Math.PI);
+  if (degrees < 0) degrees += 360;
+  return degrees;
 }
 
 function rgbaToCSS(color: { r: number; g: number; b: number; a: number }, opacity: number): string {

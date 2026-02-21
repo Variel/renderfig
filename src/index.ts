@@ -26,7 +26,7 @@ export async function renderFrame(options: RenderOptions): Promise<Buffer> {
 
   // 3. Apply overrides
   if (overrides.length > 0) {
-    applyOverrides(frame, overrides, images);
+    applyOverrides(frame, overrides, images, frameName);
   }
 
   // 4. Generate HTML
